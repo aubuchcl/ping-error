@@ -8,17 +8,26 @@ fi
 
 # Generate a timestamp for the log file name (format: YYYYMMDD_HHMMSS)
 TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
-LOG_FILE="/app/logs/error_output_$TIMESTAMP.log"
+LOG_FILE="/app/logs/ping_output_$TIMESTAMP.log"
 
-# Ping the host with a count of 1 and only look for errors (suppress successful output)
-if ! ping -c 1 "$HOST" &> /dev/null
-then
-  # If the ping fails, capture the error message
-  ERROR_MSG="[$(date)] Failed to resolve or ping the host: $HOST"
+# Run ping command 100 times in a loop
+for i in {1..100}; do
+  # Perform the ping command with -c 1 (single ping)
+  PING_OUTPUT=$(ping -c 1 "$HOST" 2>&1)
 
-  # Print the error message to stdout
-  echo "$ERROR_MSG"
-
-  # Also log the error message to a timestamped file in the volume
-  echo "$ERROR_MSG" >> "$LOG_FILE"
-fi
+  # Check if the ping command failed due to DNS resolution (host not found)
+  if echo "$PING_OUTPUT" | grep -q "Name or service not known"; then
+    # Log the failure due to DNS resolution error
+    RESULT="[$(date)] $HOST: Ping failed - IP not resolved"
+    echo "$RESULT"
+    echo "$RESULT" >> "$LOG_FILE"
+  else
+    # Extract the resolved IP address from the ping output
+    IP_ADDRESS=$(echo "$PING_OUTPUT" | grep -oP '(?<=\().*(?=\))' | head -n 1)
+    
+    # Log the success with the resolved IP address
+    RESULT="[$(date)] $HOST: Success - IP = $IP_ADDRESS"
+    echo "$RESULT"
+    echo "$RESULT" >> "$LOG_FILE"
+  fi
+done
